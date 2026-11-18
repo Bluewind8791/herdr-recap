@@ -3,9 +3,11 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
@@ -49,4 +51,19 @@ func tryLock(f *os.File) (busy bool, err error) {
 
 func unlock(f *os.File) {
 	_ = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, new(windows.Overlapped))
+}
+
+// replaceFile renames from over to. Windows refuses while another process
+// has that file open (the mod reads recaps every few seconds), so it's tried
+// again for about a second before giving up.
+func replaceFile(from, to string) error {
+	err := os.Rename(from, to)
+	for range 10 {
+		if !errors.Is(err, windows.ERROR_ACCESS_DENIED) && !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+			return err
+		}
+		time.Sleep(100 * time.Millisecond)
+		err = os.Rename(from, to)
+	}
+	return err
 }

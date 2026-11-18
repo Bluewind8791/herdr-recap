@@ -514,7 +514,8 @@ export default class Recap extends View {
     const order = [localStorage.getItem(`on.${name}`), "", ...machines().filter((m) => m.name).map((m) => m.name)];
     let last;
     for (const m of order) {
-      if (m == null || tried.has(m)) continue;
+      // Not this machine on Windows: neither has a Windows build.
+      if (m == null || tried.has(m) || (m === "" && localWindows(null))) continue;
       tried.add(m);
       try {
         const out = await tool(name, args, m || null);
@@ -524,6 +525,8 @@ export default class Recap extends View {
         last = e;
       }
     }
+    // Nowhere to ask (Windows, nothing connected): nothing found, not an error.
+    if (!tried.size) return [];
     throw last ?? new Error(`${name} isn't installed`);
   }
 

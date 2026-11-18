@@ -46,6 +46,9 @@ func unlock(f *os.File) {
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 }
 
+// replaceFile renames from over to.
+func replaceFile(from, to string) error { return os.Rename(from, to) }
+
 // claudeProcess is the Claude process for pid: on Unix, the pid the app
 // gives is Claude's own.
 func claudeProcess(pid int, argv0 string) (int, string) { return pid, argv0 }

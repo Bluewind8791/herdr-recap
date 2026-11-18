@@ -67,7 +67,7 @@ func saveRecap(r recap) error {
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, recapPath(r.Session))
+	return replaceFile(tmp, recapPath(r.Session))
 }
 
 // transcriptStamp is what a recap's freshness is judged by.

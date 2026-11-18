@@ -96,46 +96,21 @@ func detached(self string, args []string, logPath string) *exec.Cmd { return nil
 
 // claudeProcess is the Claude process for pid. On Windows herdr-core reports
 // the terminal's shell as its foreground process, not the claude it runs, so
-// it's the claude.exe among pid and its descendants (the highest pid, should
-// there be more); its path is what the recap runs. Without one, pid and argv0
-// as given.
+// it's the claude.exe among pid and its descendants (outerClaude); its path is
+// what the recap runs. Without one, pid and argv0 as given.
 func claudeProcess(pid int, argv0 string) (int, string) {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return pid, argv0
 	}
 	defer windows.CloseHandle(snap)
-	type proc struct {
-		parent int
-		name   string
-	}
 	procs := map[int]proc{}
 	var e windows.ProcessEntry32
 	e.Size = uint32(unsafe.Sizeof(e))
 	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
 		procs[int(e.ProcessID)] = proc{int(e.ParentProcessID), windows.UTF16ToString(e.ExeFile[:])}
 	}
-	// Descends from pid: its parent chain reaches pid (bounded, as parent ids
-	// are reused on Windows and can loop).
-	descends := func(p int) bool {
-		for range 32 {
-			if p == pid {
-				return true
-			}
-			q, ok := procs[p]
-			if !ok || q.parent == p || q.parent == 0 {
-				return false
-			}
-			p = q.parent
-		}
-		return false
-	}
-	found := 0
-	for p, q := range procs {
-		if strings.EqualFold(q.name, "claude.exe") && descends(p) && p > found {
-			found = p
-		}
-	}
+	found := outerClaude(procs, pid)
 	if found == 0 {
 		return pid, argv0
 	}
@@ -143,4 +118,43 @@ func claudeProcess(pid int, argv0 string) (int, string) {
 		return found, filepath.Clean(exe)
 	}
 	return found, argv0
+}
+
+type proc struct {
+	parent int
+	name   string
+}
+
+// outerClaude is the claude.exe nearest pid among it and its descendants: the
+// agent's own, not one it started further down (a `claude -p` from its Bash
+// tool, a hook), whose session file isn't the agent's. The nearest has no
+// claude.exe between it and pid, as that one would be nearer. Pids aren't in
+// start order on Windows, so two as near are told apart by the lower pid only
+// to always give the same one. 0 with none.
+func outerClaude(procs map[int]proc, pid int) int {
+	// How many parents up from p pid is, -1 when it isn't one (bounded, as
+	// parent ids are reused on Windows and can loop).
+	depth := func(p int) int {
+		for d := range 32 {
+			if p == pid {
+				return d
+			}
+			q, ok := procs[p]
+			if !ok || q.parent == p || q.parent == 0 {
+				return -1
+			}
+			p = q.parent
+		}
+		return -1
+	}
+	found, nearest := 0, 0
+	for p, q := range procs {
+		if !strings.EqualFold(q.name, "claude.exe") {
+			continue
+		}
+		if d := depth(p); d >= 0 && (found == 0 || d < nearest || d == nearest && p < found) {
+			found, nearest = p, d
+		}
+	}
+	return found
 }
