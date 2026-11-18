@@ -288,6 +288,10 @@ func gitBranch(dir string) string {
 		gitPath := filepath.Join(d, ".git")
 		fi, err := os.Stat(gitPath)
 		if err != nil {
+			// A volume's root (C:\) is its own parent: the top.
+			if filepath.Dir(d) == d {
+				break
+			}
 			continue
 		}
 		if !fi.IsDir() {

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -211,13 +210,13 @@ func lockSession(ctx context.Context, id string) (func(), error) {
 		return nil, err
 	}
 	for {
-		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-		if err == nil {
-			break
-		}
-		if err != syscall.EWOULDBLOCK && err != syscall.EAGAIN {
+		busy, err := tryLock(f)
+		if err != nil {
 			f.Close()
 			return nil, err
+		}
+		if !busy {
+			break
 		}
 		select {
 		case <-ctx.Done():
@@ -227,7 +226,7 @@ func lockSession(ctx context.Context, id string) (func(), error) {
 		}
 	}
 	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		unlock(f)
 		f.Close()
 	}, nil
 }

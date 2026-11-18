@@ -19,10 +19,13 @@ import { tones, tint, countPill, STAGES, ALL, stageOf, stateIcon, stageColor, ic
 // and issues (which the plugins cache for a minute) less often.
 const REREAD_MS = 5000;
 const LOOKUP_MS = 20000;
-// The list's height at most; the popup's own height caps it too.
-const LIST_MAX = 680;
 
 const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+
+// How wide a text is, in a Latin letter's widths: Hangul, kana, CJK and
+// full-width forms are about two, so a card in them wraps twice as often.
+const WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/gu;
+const columns = (s) => s.length + (s.match(WIDE)?.length ?? 0);
 
 // An agent on another machine (`ax42/t1`) says which.
 const machineOf = (address) => (address.includes("/") ? address.split("/")[0] : null);
@@ -626,10 +629,10 @@ export default class Recap extends View {
   height(r) {
     const perLine = Math.max(40, Math.floor((this.width - 120) / 6.6));
     const said = this.said(r) ?? "Nothing to recap yet.";
-    // Padding and the title line; the recap's lines; the callout, the rename
-    // line and the chips, each with its gap.
-    let h = 23 + 22 + Math.ceil(said.length / perLine) * 19.5;
-    if (r.pending) h += 46;
+    // Padding and the title line; the recap's lines; the callout (its question
+    // wraps beside the Reply), the rename line and the chips, each with its gap.
+    let h = 23 + 22 + Math.ceil(columns(said) / perLine) * 19.5;
+    if (r.pending) h += 26.5 + Math.ceil(columns(r.pending) / Math.max(20, perLine - 18)) * 19.5;
     if (r.suggested || r.renaming) h += 25;
     if (r.branch || r.ticket || r.pr || r.info.tasks_total) h += 28;
     return h + 4;
@@ -805,14 +808,16 @@ export default class Recap extends View {
     // The list starts at the agent that keeps the chosen one in sight (its
     // cards have buttons of their own, so a list that scrolls itself isn't
     // for them): up to the chosen one when it's above, and on from the top
-    // while what's between doesn't fit.
+    // while what's between doesn't fit in the list as tall as it was drawn (the
+    // popup's height caps it).
     const headed = (i) => this.tab === "all" && (i === 0 || this.shown[i].stage !== this.shown[i - 1].stage);
-    const est = (i) => this.height(this.shown[i]) + (headed(i) ? 32 : 0);
+    const est = (i) => this.height(this.shown[i]) + (headed(i) ? 32 : 0) + 2;
+    const room = this.listSeen ?? Infinity;
     this.first = Math.max(0, Math.min(this.first ?? 0, this.at));
     while (this.first < this.at) {
-      let h = 32; // the first one's heading
+      let h = 32 + (this.first > 0 ? 18 : 0); // the first one's heading, and "↑ more"
       for (let i = this.first; i <= this.at; i++) h += est(i);
-      if (h <= LIST_MAX) break;
+      if (h <= room) break;
       this.first++;
     }
 
@@ -842,7 +847,7 @@ export default class Recap extends View {
     // The popup is as tall as what's in it, up to its height, so the list says
     // how tall it'd like to be, and shrinks (and scrolls) when that's too tall.
     const listH = this.shown.length
-      ? Math.min(LIST_MAX, headings * 32 + this.shown.reduce((h, r) => h + this.height(r), 0))
+      ? headings * 32 + this.shown.reduce((h, r) => h + this.height(r) + 2, 0)
       : 44;
     const empty = this.filter ? "No agent matches." : "No agents yet. Agents started in Herdr show up here, from every machine.";
     const info = sel?.info ?? {};
@@ -905,6 +910,11 @@ export default class Recap extends View {
           .flex_shrink(1)
           .gap(2)
           .overflow_hidden()
+          .on_size_change((size, cx) => {
+            if (Math.abs(size.height - (this.listSeen ?? 0)) < 1) return;
+            this.listSeen = size.height;
+            cx.notify();
+          })
           // The wheel moves through the agents, as ↑ ↓ do.
           .on_scroll_wheel((e, cx) => {
             this.wheel = (this.wheel ?? 0) + (e.delta_lines ? e.delta_lines.y * 40 : e.delta.y);

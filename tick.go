@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -113,8 +112,8 @@ var spawn = func(args ...string) error {
 	cmd.Stdout, cmd.Stderr = log, log
 	// Its own session, so it outlives the hook: herdr may end the hook's
 	// process group once tick returns.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Start(); err != nil {
+	cmd, err = startDetached(cmd)
+	if err != nil {
 		return err
 	}
 	return cmd.Process.Release()

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -93,7 +94,7 @@ func claudePID(procs []process) (pid int, argv0 string) {
 // agentBinary is the claude the agent was started as: argv0 itself when it's
 // a path, else the first claude on the agent's own PATH, as its shell found it.
 func agentBinary(argv0 string, env map[string]string) string {
-	if argv0 == "" || strings.Contains(argv0, "/") {
+	if argv0 == "" || strings.Contains(argv0, "/") || filepath.IsAbs(argv0) {
 		return argv0
 	}
 	for _, dir := range filepath.SplitList(env["PATH"]) {
@@ -101,11 +102,20 @@ func agentBinary(argv0 string, env map[string]string) string {
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
 			return p
 		}
+		// Windows has no execute bits: a program there is claude.exe.
+		if runtime.GOOS == "windows" {
+			for _, q := range []string{p + ".exe", p} {
+				if fi, err := os.Stat(q); err == nil && !fi.IsDir() {
+					return q
+				}
+			}
+		}
 	}
 	return ""
 }
 
 func sessionForPID(pid int, argv0 string) (claudeSession, error) {
+	pid, argv0 = claudeProcess(pid, argv0)
 	env, err := processEnv(pid)
 	if err != nil {
 		return claudeSession{}, fmt.Errorf("reading claude's environment: %w", err)

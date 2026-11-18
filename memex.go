@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -88,7 +87,7 @@ func runBoundedCommand(cmd *exec.Cmd) ([]byte, string, error) {
 	stdout := &limitedBuffer{limit: commandOutputLimit, exceeded: exceeded, once: once}
 	stderr := &limitedBuffer{limit: commandErrorLimit, exceeded: exceeded, once: once}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 	cmd.Cancel = func() error { return killCommandGroup(cmd) }
 	if err := cmd.Start(); err != nil {
 		return nil, "", err
@@ -109,17 +108,6 @@ func runBoundedCommand(cmd *exec.Cmd) ([]byte, string, error) {
 		}
 		return nil, stderr.String(), errOutputLimit
 	}
-}
-
-func killCommandGroup(cmd *exec.Cmd) error {
-	if cmd.Process == nil {
-		return os.ErrProcessDone
-	}
-	err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	if errors.Is(err, syscall.ESRCH) {
-		return os.ErrProcessDone
-	}
-	return err
 }
 
 func recapContext(ctx context.Context, cfg config) (context.Context, context.CancelFunc) {
