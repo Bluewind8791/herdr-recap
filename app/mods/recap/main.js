@@ -11,7 +11,7 @@
 import { View, div } from "gpui-kit";
 import * as fs from "fs/promises";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { agents, machines, spaces, run, exec, hc, theme, appHome, props, closeOverlay, openOverlay, nextCommand, window } from "herdr";
+import { agents, machines, spaces, run, exec, hc, theme, home, appHome, props, closeOverlay, openOverlay, nextCommand, window } from "herdr";
 import { demoRows } from "./demo.js";
 import { tones, tint, countPill, STAGES, ALL, stageOf, stateIcon, stageColor, icon, prLook, issueIcon, chip, bar, duration, words, key, MONO } from "./look.js";
 
@@ -73,16 +73,27 @@ mkdir -p "$dest" && mv "$tmp/herdr-recap" "$bin.new" && chmod 755 "$bin.new" && 
 printf '%s' "$bin"
 `;
 
+// Windows (this machine only): herdr-recap has no Windows release, so the mod
+// runs a herdr-recap.exe built from source into the same folder (see the
+// README), directly rather than through sh (Git's sh rewrites backslashes in
+// the JSON it passes on).
+const localWindows = (machine) => !machine && window()?.platform === "windows";
+const windowsBinary = () => `${home()}/.local/share/herdr-recap/app/${RECAP_VERSION}/herdr-recap.exe`;
+
 // The path of herdr-recap on a machine (null: this one), put there first if
 // it isn't: asked once per machine while the mod runs.
 const binaries = new Map();
 function recapBinary(machine) {
   const key = machine ?? "";
   if (!binaries.has(key)) {
-    const p = exec("sh", ["-c", PROVISION, "sh", RECAP_VERSION], { on: machine }).then((r) => {
-      if (r.code !== 0 || !r.stdout.trim()) throw new Error(r.stderr.trim().split("\n").pop() || `herdr-recap: exit ${r.code}`);
-      return r.stdout.trim();
-    });
+    const p = localWindows(machine)
+      ? fs.access(windowsBinary()).then(() => windowsBinary(), () => {
+          throw new Error(`no ${windowsBinary()}: build it (see the README)`);
+        })
+      : exec("sh", ["-c", PROVISION, "sh", RECAP_VERSION], { on: machine }).then((r) => {
+          if (r.code !== 0 || !r.stdout.trim()) throw new Error(r.stderr.trim().split("\n").pop() || `herdr-recap: exit ${r.code}`);
+          return r.stdout.trim();
+        });
     // A failure is tried again next time (offline, say), not remembered.
     p.catch(() => binaries.delete(key));
     binaries.set(key, p);
@@ -95,12 +106,15 @@ function recapBinary(machine) {
 async function tool(name, args, machine) {
   if (name === "herdr-recap") {
     const path = await recapBinary(machine);
-    const r = await exec("sh", ["-c", 'exec "$0" "$@"', path, ...args], { on: machine });
+    const r = localWindows(machine)
+      ? await exec(path, args)
+      : await exec("sh", ["-c", 'exec "$0" "$@"', path, ...args], { on: machine });
     if (r.code !== 0) throw new Error(r.stderr.trim().split("\n").pop() || `${name}: exit ${r.code}`);
     return JSON.parse(r.stdout);
   }
   // herdr-github and herdr-linear: the copy their app mod fetched (the newest),
-  // else the one installed for the TUI.
+  // else the one installed for the TUI. Neither has a Windows build.
+  if (localWindows(machine)) throw new Error(`${name} isn't installed`);
   const find = `for b in $(ls -d "$HOME/.local/share/${name}/app/"*/${name} 2>/dev/null | sort -V -r) "$HOME/.local/bin/${name}"; do [ -x "$b" ] && exec "$b" "$@"; done; echo "${name} isn't installed" >&2; exit 127`;
   const r = await exec("sh", ["-c", find, "sh", ...args], { on: machine });
   if (r.code !== 0) throw new Error(r.stderr.trim().split("\n").pop() || `${name}: exit ${r.code}`);
@@ -273,7 +287,8 @@ export default class Recap extends View {
   }
 
   open(url) {
-    if (url) exec(window()?.platform === "macos" ? "open" : "xdg-open", [url]).catch(() => {});
+    const platform = window()?.platform;
+    if (url) exec(platform === "macos" ? "open" : platform === "windows" ? "explorer" : "xdg-open", [url]).catch(() => {});
   }
 
   // The keyboard moves on a moment later: after this key, and once the reply
@@ -415,7 +430,8 @@ export default class Recap extends View {
     info.title = null;
     const machine = machineOf(address);
     const bin = await recapBinary(machine).catch(() => null);
-    if (bin) await exec("sh", ["-c", 'exec "$1" settle "$2"', "sh", bin, info.session], { on: machine }).catch(() => {});
+    if (bin && localWindows(machine)) await exec(bin, ["settle", info.session]).catch(() => {});
+    else if (bin) await exec("sh", ["-c", 'exec "$1" settle "$2"', "sh", bin, info.session], { on: machine }).catch(() => {});
   }
 
   // Keeps what's known for the next opening, when it's changed; says whether

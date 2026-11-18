@@ -8,6 +8,11 @@ agent, where it got to and whose move it is: in the
 [Herdr app](https://herdr.dev), across every machine it's connected to, and
 in the [herdr](https://herdr.dev) TUI. One install, the same recaps in both.
 
+> **This fork** ([`windows-port`](https://github.com/Bluewind8791/herdr-recap/tree/windows-port))
+> runs the Herdr app's Recap on **Windows** too. See
+> [On Windows (this fork)](#on-windows-this-fork). Everything else is
+> [mrolafsson/herdr-recap](https://github.com/mrolafsson/herdr-recap) as is.
+
 ![Recap in the Herdr app, on the demo's agents: one that needs you, with its question and a Reply, one done with a better title suggested, and two working, each with its machine, branch, changes, tasks and Linear issue](app/preview.png)
 
 *In the Herdr app.*
@@ -99,6 +104,53 @@ curl -fsSL https://raw.githubusercontent.com/mrolafsson/herdr-recap/main/install
 installs the mod, the plugin, or both, whichever of the app and herdr you
 have.
 
+### On Windows (this fork)
+
+There's no Windows release, and `install.sh` doesn't run there, so the Herdr
+app's mod is set up by hand. With [Go](https://go.dev/dl/) installed, in
+PowerShell:
+
+1. Build herdr-recap into the folder the mod looks in. The version in the
+   path must be the mod's `RECAP_VERSION` (in `app/mods/recap/main.js`,
+   `0.12.10` here):
+
+   ```powershell
+   git clone -b windows-port https://github.com/Bluewind8791/herdr-recap.git
+   cd herdr-recap
+   go build -o "$env:USERPROFILE\.local\share\herdr-recap\app\0.12.10\herdr-recap.exe" .
+   ```
+
+2. Copy the mod into the app's folder:
+
+   ```powershell
+   Copy-Item -Recurse app\mods\recap "$env:USERPROFILE\.config\herdr-app\mods\recap"
+   ```
+
+3. Merge `app/keys.json` into `%USERPROFILE%\.config\herdr-app\keys.json`.
+   Its `cmd-r` is the Mac's key: on Windows, bind the popup in `global` to a
+   key the app doesn't use, such as
+
+   ```json
+   "ctrl-shift-r": "mod.open:recap"
+   ```
+
+Then press it. A missing `herdr-recap.exe` shows up as the popup's error,
+with the path it looked for.
+
+What's different on Windows:
+
+- Only agents on the Windows machine itself go through `herdr-recap.exe`.
+  Agents on connected Linux or macOS machines fetch the release there, as
+  usual.
+- Codex agents aren't recapped: their session is found from the files the
+  Codex process has open, and Windows has no cheap way to list them.
+- Pull requests and Linear issues don't show for Windows agents:
+  herdr-github and herdr-linear have no Windows build.
+- Links open with `explorer`.
+- The herdr TUI plugin isn't covered: only the Herdr app's mod was tried.
+- Some of `go test`'s tests assume Unix (`HOME`, `:` in `PATH`, `sh`) and
+  fail on Windows.
+
 ### Requirements
 
 - **The Herdr app**, or **herdr 0.9.0** or later.
@@ -110,7 +162,8 @@ have.
   sessions
   ([nicosuave/memex#220](https://github.com/nicosuave/memex/pull/220)),
   which 0.27.2 does.
-- **Linux** or **macOS**, on arm64 or x86-64.
+- **Linux** or **macOS**, on arm64 or x86-64; **Windows** for the Herdr
+  app, with this fork ([On Windows](#on-windows-this-fork)).
 
 ## In the Herdr app
 
@@ -603,6 +656,9 @@ stay live. For each Claude agent it finds the session through the pane's
 profile switcher (clauth and the like) can name a different session: the
 process's `CLAUDE_CONFIG_DIR` (from `/proc` on Linux, `ps` on macOS) leads
 to `sessions/<pid>.json`, which names the session and where it was started.
+On Windows, herdr reports the terminal's shell as the pane's process, so it's
+the `claude.exe` under that shell, and its environment is read from the
+process's PEB.
 
 For Claude, the rest of a row comes from the end of the session's transcript: the last
 tool call without a result (what a blocked agent is asking), its task list,
