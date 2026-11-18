@@ -107,23 +107,27 @@ have.
 ### On Windows (this fork)
 
 There's no Windows release, and `install.sh` doesn't run there, so the Herdr
-app's mod is set up by hand. With [Go](https://go.dev/dl/) installed, in
-PowerShell:
+app's mod is set up by hand. With [Git](https://git-scm.com/) and
+[Go](https://go.dev/dl/) installed, in PowerShell:
 
 1. Build herdr-recap into the folder the mod looks in. The version in the
    path must be the mod's `RECAP_VERSION` (in `app/mods/recap/main.js`,
-   `0.12.10` here):
+   `0.12.10` here). The first line removes a clone left by an earlier run:
 
    ```powershell
-   git clone -b windows-port https://github.com/Bluewind8791/herdr-recap.git
-   cd herdr-recap
-   go build -o "$env:USERPROFILE\.local\share\herdr-recap\app\0.12.10\herdr-recap.exe" .
+   Remove-Item -Recurse -Force "$env:TEMP\herdr-recap-src" -ErrorAction SilentlyContinue
+   git clone -b windows-port https://github.com/Bluewind8791/herdr-recap.git "$env:TEMP\herdr-recap-src"
+   go -C "$env:TEMP\herdr-recap-src" build -o "$env:USERPROFILE\.local\share\herdr-recap\app\0.12.10\herdr-recap.exe" .
    ```
 
-2. Copy the mod into the app's folder:
+2. Copy the mod into the app's folder. This works for an update too: it
+   copies the folder's contents over the old files. (Copying the folder
+   itself into one that exists puts it in `recap\recap` and leaves the old
+   files.)
 
    ```powershell
-   Copy-Item -Recurse app\mods\recap "$env:USERPROFILE\.config\herdr-app\mods\recap"
+   New-Item -ItemType Directory -Force "$env:USERPROFILE\.config\herdr-app\mods\recap" | Out-Null
+   Copy-Item -Recurse -Force "$env:TEMP\herdr-recap-src\app\mods\recap\*" "$env:USERPROFILE\.config\herdr-app\mods\recap"
    ```
 
 3. Merge `app/keys.json` into `%USERPROFILE%\.config\herdr-app\keys.json`.
@@ -134,8 +138,16 @@ PowerShell:
    "ctrl-shift-r": "mod.open:recap"
    ```
 
+   and remove the `"cmd-r": "mod.open:recap"` line: it isn't used there.
+
 Then press it. A missing `herdr-recap.exe` shows up as the popup's error,
-with the path it looked for.
+with the path it looked for. Then remove the clone
+(`$env:TEMP\herdr-recap-src`).
+
+To update, run all three steps again, with the new `RECAP_VERSION` in the
+path. Windows won't replace an `.exe` while it runs, so the build fails if
+herdr-recap.exe is running: close the Recap popup, wait a minute for
+recaps written in the background to finish, and run it again.
 
 What's different on Windows:
 
@@ -147,6 +159,8 @@ What's different on Windows:
 - Pull requests and Linear issues don't show for Windows agents:
   herdr-github and herdr-linear have no Windows build.
 - Links open with `explorer`.
+- Only Claude Code's native install (`claude.exe`) is found. Claude Code
+  installed with npm runs as `node.exe`, and its agents aren't recapped.
 - The herdr TUI plugin isn't covered: only the Herdr app's mod was tried.
 - Some of `go test`'s tests assume Unix (`HOME`, `:` in `PATH`, `sh`) and
   fail on Windows.
@@ -163,7 +177,8 @@ What's different on Windows:
   ([nicosuave/memex#220](https://github.com/nicosuave/memex/pull/220)),
   which 0.27.2 does.
 - **Linux** or **macOS**, on arm64 or x86-64; **Windows** for the Herdr
-  app, with this fork ([On Windows](#on-windows-this-fork)).
+  app, with this fork ([On Windows](#on-windows-this-fork)), Git, and Go
+  1.26.8 or later (an older Go 1.21 or later fetches that one by itself).
 
 ## In the Herdr app
 
