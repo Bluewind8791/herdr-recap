@@ -50,7 +50,8 @@ action in it (`recap.reply`, `recap.rename`, `recap.ignore`,
 `recap.escape`), and `mod.open:recap`. Missing any of them leaves Tab, Esc
 or ⌘R doing the app's own thing instead.
 
-That's all. **Don't install herdr-recap, or anything else, on any machine:**
+That's all (on Windows, see [On Windows](#on-windows-this-fork) below).
+**Don't install herdr-recap, or anything else, on any machine:**
 the mod fetches the herdr-recap release it needs onto each machine with
 agents by itself, the first time it looks there, and it does the same for
 machines added later. What it needs there is already present: Claude Code
@@ -70,6 +71,39 @@ few seconds longer while herdr-recap is fetched; afterwards it's in
 cards (written in the background for agents that aren't working, so give
 it a minute and open it again). A machine it couldn't reach, or couldn't
 fetch herdr-recap onto, is named in a line under the list with why.
+
+### On Windows (this fork)
+
+herdr-recap has no Windows release, so on a Windows machine the mod can't
+fetch it: it runs a `herdr-recap.exe` built from source instead, from
+`%USERPROFILE%\.local\share\herdr-recap\app\<version>\`, where `<version>` is
+`RECAP_VERSION` in `mods/recap/main.js`. When the app runs on Windows, after
+steps 1 to 3:
+
+4. Check that Go is installed (`go version`). If it isn't, ask the person to
+   install it (go.dev/dl); don't install it unasked.
+5. Build it from this fork's `windows-port` branch, into that folder (in
+   PowerShell, with `<version>` filled in):
+
+   ```powershell
+   git clone -b windows-port https://github.com/Bluewind8791/herdr-recap.git "$env:TEMP\herdr-recap-src"
+   go -C "$env:TEMP\herdr-recap-src" build -o "$env:USERPROFILE\.local\share\herdr-recap\app\<version>\herdr-recap.exe" .
+   ```
+
+   Then remove the clone.
+6. `cmd-r` is the Mac's key. Bind the popup in `keys.json`'s `global` to
+   `ctrl-shift-r` instead (`"ctrl-shift-r": "mod.open:recap"`); ask the
+   person for another key if that one is taken.
+
+On an update, rebuild it when `RECAP_VERSION` changed: the mod looks only in
+its own version's folder. A missing `herdr-recap.exe` shows as the popup's
+error, with the path it looked for.
+
+Only agents on the Windows machine itself use that build: connected Linux
+and macOS machines fetch the release as usual. For Windows agents, Codex
+agents aren't recapped, pull requests and Linear issues don't show
+(herdr-github and herdr-linear have no Windows build), and links open with
+`explorer`.
 
 ## What it does, and asks
 
@@ -109,7 +143,7 @@ chips. JetBrains Mono for branches, machines and keys.
 
 ## Keys (`keys.json`)
 
-`cmd-r` opens it. In it: `tab` replies, `escape` leaves a reply before it
+`cmd-r` opens it (`ctrl-shift-r` on Windows). In it: `tab` replies, `escape` leaves a reply before it
 closes the popup, `ctrl-r` takes a suggested title, or asks for one now (`herdr-recap
 title`, in the background), `ctrl-x` turns it down, and a click on the
 chosen agent's title renames it to a title you type.
