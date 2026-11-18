@@ -863,11 +863,6 @@ export default class Recap extends View {
       items.push(this.card(t, o, r, sel, now));
     }
 
-    // The popup is as tall as what's in it, up to its height, so the list says
-    // how tall it'd like to be, and shrinks (and scrolls) when that's too tall.
-    const listH = this.shown.length
-      ? headings * 32 + this.shown.reduce((h, r) => h + this.height(r) + 2, 0)
-      : 44;
     const empty = this.filter ? "No agent matches." : "No agents yet. Agents started in Herdr show up here, from every machine.";
     const info = sel?.info ?? {};
     const trouble = Object.values(this.unasked);
@@ -877,9 +872,13 @@ export default class Recap extends View {
       : `${all.length} agent${all.length === 1 ? "" : "s"}${machineCount > 1 ? ` · ${machineCount} machines` : ""}`;
     const replying = this.replying;
 
+    // The popup is centred, so it's always its full height: one as tall as
+    // what's in it would move up and down as the list changes. The list takes
+    // what's left, and scrolls when that's too little.
     return v_flex()
       .id("recap")
       .w_full()
+      .h_full()
       .min_h(0)
       .p(16)
       .gap(10)
@@ -924,9 +923,8 @@ export default class Recap extends View {
       .child(
         v_flex()
           .id("rc-list")
-          .h(listH)
+          .flex_1()
           .min_h(0)
-          .flex_shrink(1)
           .gap(2)
           .overflow_hidden()
           .on_size_change((size, cx) => {

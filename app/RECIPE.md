@@ -25,7 +25,7 @@ to:
 
 ## What it is
 
-A popup mod (`mod.json`: an overlay popup at the top, 80% of the window),
+A popup mod (`mod.json`: a dialog in the middle of the window, 80% of it),
 opened with ⌘R. It's the Herdr app's side of
 [herdr-recap](https://github.com/mrolafsson/herdr-recap), which writes the
 recaps.
